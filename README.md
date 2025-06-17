@@ -1,2 +1,0 @@
-# RGT---Rodent-Gait-Tracker
-
