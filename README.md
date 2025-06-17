@@ -23,10 +23,8 @@ The **Rodent Gait Tracker (RGT)** is a Python application designed to monitor an
 ## Installation
 1. Clone the repository or download the script:
    ```bash
-   git clone https://github.com/yourusername/rgt.git
-   cd rgt
+   git clone https://github.com/AldenChiu/RGT---Rodent-Gait-Tracker.git
    ```
-   (Replace the URL with your repository link if hosted.)
 
 2. Install the required dependencies:
    ```bash
@@ -82,9 +80,6 @@ The **Rodent Gait Tracker (RGT)** is a Python application designed to monitor an
 
 ## Contributing
 Feel free to fork this repository, submit issues, or send pull requests. Improvements like additional rodent types, better performance optimization, or enhanced GUI features are welcome!
-
-## License
-[Specify your license here, e.g., MIT License] - Add a license file if applicable.
 
 ## Acknowledgments
 - Built with help from xAI's Grok 3.
