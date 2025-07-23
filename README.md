@@ -4,10 +4,9 @@ The **Rodent Gait Tracker (RGT)** is a Python application designed to monitor an
 
 ## Features
 - Real-time rodent gait tracking using OpenCV.
-- Customizable parameters (e.g., speed range, click limit).
+- Customizable parameters (minimum speed, speed range, click limit).
 - GUI for initial setup (rodent selection, screen viewing coordinates, click limit, timer, email notifications).
 - Live adjustment window to tweak settings during tracking.
-- Restart and stop functionality with settings persistence.
 - Email notifications when the timer expires.
 
 ## Requirements
@@ -19,6 +18,7 @@ The **Rodent Gait Tracker (RGT)** is a Python application designed to monitor an
   - `mss` (for screen capture)
   - `pyautogui` (for mouse automation)
   - `smtplib` (for email notifications, with app-specific password setup)
+  - `PIL` (for images)
 
 ## Installation
 1. Clone the repository or download the script:
@@ -26,13 +26,18 @@ The **Rodent Gait Tracker (RGT)** is a Python application designed to monitor an
    git clone https://github.com/AldenChiu/RGT---Rodent-Gait-Tracker.git
    ```
 
-2. Install the required dependencies:
+2. Change to the project directory:
    ```bash
-   pip install opencv-python numpy mss pyautogui
+   cd RGT---Rodent-Gait-Tracker
    ```
-   Note: `tkinter` is typically included with Python; ensure it’s available.
 
-3. Configure email settings:
+3. Install the required dependencies:
+   ```bash
+   pip install opencv-python numpy mss pyautogui Pillow
+   ```
+   Note: `tkinter` is typically included with Python; ensure it’s available. All other libraries are included with Python.
+
+4. Configure email settings:
    - Edit the file named `config.json` in the project directory with your email credentials:
      ```json
      {
@@ -41,11 +46,27 @@ The **Rodent Gait Tracker (RGT)** is a Python application designed to monitor an
        "recipient_email": "recipient_email@gmail.com"
      }
      ```
-   - Set sender_email as the email address you'd like to send reminder emails to.
+   - Set sender_email as the email address you'd like to be the sender of reminder emails.
    - Use an app-specific password for Gmail or your email provider’s security settings. Look this up if you don't know where to find it.
-   - Leave recipient_email untouched, as you can adjust it during the program.
+   - Leave recipient_email untouched, as you can adjust it during the program. This will be the email you want to receive reminder emails.
 
 ## Usage
+If the user wants to use RGT as an application that can be pinned to the taskbar, do the following:
+1. Start in the project directory:
+   ```bash
+   cd RGT---Rodent-Gait-Tracker
+   ```
+   
+2. Run the script:
+   ```
+   pyinstaller --onefile --windowed --add-data "RGT_Logo.ico;." --add-data "config.json;." --add-data "RGT_Logo.png;." rodent_gait_tracker.py
+   ```
+
+3. Once created, make sure `config.json`, `RGT_Logo.ico`, and `RGT_Logo.png` are moved to the `dist` folder.
+
+4. Open the application in the `dist` folder and pin it to your taskbar.
+
+For those using the terminal:
 1. Run the script:
    ```bash
    python rodent_gait_tracker.py
@@ -53,34 +74,36 @@ The **Rodent Gait Tracker (RGT)** is a Python application designed to monitor an
 
 2. Follow the setup prompts:
    - Select the rodent type (e.g., Black Rat, White Mouse).
-   - Choose or define the area of the screen with the mouse and click coordinates. When doing so, confine your selection to only the side view of the rodent.
+   - Define the coordinates containing the side view of the rodent, and where you want clicks to be.
    - Set a click limit (or skip for no limit).
    - Set a timer duration (in minutes, or skip).
    - Configure the recipient email for notifications.
 
 3. During tracking:
-   - A stop window appears with "Stop Program" and "Adjust Settings" buttons.
-   - Click "Adjust Settings" to open a live adjustment window for speed duration and speed range.
-   - The program functions such that when it simulates a click when the rodent's speed over a set time (Speed Duration) is within a certain percent (Speed Range %) of the average speed over that time.
-   - Click "Stop Program" to end the session and delete saved settings.
+   - A window will appear with "Stop Program" and "Adjust Settings" buttons.
+   - Click "Adjust Settings" to open a live adjustment window for minimum tracking speed, speed duration, and speed range.
+   - The program simulates a click when the rodent's speed over a set time (Speed Duration) is within a certain percent (Speed Range %) of the average speed over that time (providing it's always above Speed Min).
 
 4. End conditions:
    - The program stops when the timer expires, the click limit is reached, or the stop button is pressed.
-   - If selected, an email notification is automatically sent when the timer expires or click limit is reached.
-   - Choose "Restart" to continue with the same settings or "Cancel" to exit and reset.
+   - If selected, an email notification is automatically sent when a limit is reached.
+   - Settings are saved and can be used the next time program is run.
 
 ## Configuration
-- **Settings File**: The script saves settings to `rgt_settings.json` for reuse. Deleting this file forces a new setup.
-- **Coordinates File**: `coordinates.json` stores saved tracking coordinates.
+- **Settings File**: `rgt_settings.json` stores all settings for reuse.
+- **Coordinates File**: `coordinates.json` stores specifically saved tracking coordinates.
 
 ## Known Issues
-- Sometimes misclicks when the rodent gets on its hind legs, turns around, or at the very beginning when it pops out its nose. In the testing I've done, about 50% of videos recorded are good.
-- Settings for different rodent types have not all been tested. I've only tested with black mice and black and white rats.
-- Manually clicking doesn't add to the click counter, so doing so will result in more videos recorded than originally set.
+- RGT currently clicks more frequently than it should, with about a 50% yield. Recording twice as many as needed is advised.
+- Incorrectly captured videos are often caused by the rodent standing on its hind legs, turning around anywhere in the arena, or sticking its nose out from offscreen. These mistakes can be reduced by setting the coordinates to exclude the top and some of the edges of the area.
+- Only the settings for black mice and black + white rats have been tested.
+- Manually clicking the record button doesn't add to the click counter. Doing so will result in more videos recorded than originally set.
 
 ## Contributing
-Feel free to fork this repository, submit issues, or send pull requests. Improvements like additional rodent types, better performance optimization, or enhanced GUI features are welcome!
+Feel free to fork this repository, submit issues, or send pull requests. Improvements like better performance optimization or enhanced GUI features are welcome!
 
 ## Acknowledgments
 - Built with help from xAI's Grok 3.
 - Utilizes OpenCV, Tkinter, and other open-source libraries.
+
+Last updated 2025/07/23

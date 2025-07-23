@@ -1,5 +1,6 @@
 """
-RODENT GAIT TRACKER (RGT)
+RODENT GAIT TRACKER (RGT) OFFICIAL
+Last updated: 2025/07/23
 """
 
 import cv2
@@ -10,6 +11,8 @@ import mss
 import pyautogui
 import tkinter as tk
 from tkinter import messagebox, ttk
+import tkinter.font as tkFont
+from PIL import Image, ImageTk
 import sys
 import json
 import os
@@ -21,9 +24,6 @@ from email.message import EmailMessage
 FRAME_RATE = 500  # Photron camera frame rate
 FRAME_SKIP = 25  # Determines fps (FRAME_RATE/FRAME_SKIP)
 RESOLUTION = (640, 480)  # Downscale resolution (set to None for original)
-# Speed/tracking
-SPEED_RANGE_PERCENT = 50  # 50% range for speed trigger
-IN_RANGE_DURATION = 0.5  # Seconds to maintain speed range before click
 # Files
 COORDINATES_FILE = "coordinates.json" # File to store coordinates
 CONFIG_FILE = "config.json" # File to store email settings
@@ -31,7 +31,7 @@ CONFIG_FILE = "config.json" # File to store email settings
 SPEEDS_CAP = 30  # Max entries for speeds
 
 time_expired_event = threading.Event() # Initialize as a threading.Event
-send_email_flag = False
+send_email_flag = True
 
 # Screen capture/clicking
 sct = mss.mss()
@@ -48,6 +48,64 @@ initial_settings = {}
 FUNCTIONS
 """
 
+# START SCREEN
+# Get the icon to show on every window
+if hasattr(sys, '_MEIPASS'):
+    icon_path_png = os.path.join(sys._MEIPASS, 'RGT_Logo.png')
+else:
+    icon_path_png = 'RGT_Logo.png'
+
+def create_start_screen_popup():
+    popup = tk.Toplevel()
+    popup.title("RGT")
+    recent_settings = os.path.exists("rgt_settings.json")
+    if recent_settings: # Make room to show recent settings
+        center_x, center_y = center_window(popup, 320, 425)
+        popup.geometry(f"320x425+{center_x}+{center_y}")
+    else:
+        center_x, center_y = center_window(popup, 260, 280)
+        popup.geometry(f"260x280+{center_x}+{center_y}")
+    popup.resizable(False, False)
+    popup.iconbitmap(icon_path)
+
+    img = Image.open(icon_path_png) # Open the icon file using PIL
+    img = img.resize((150, 150), Image.Resampling.LANCZOS)
+    photo = ImageTk.PhotoImage(img) # Convert to PhotoImage for Tkinter
+
+    image_label = tk.Label(popup, image=photo)
+    image_label.image = photo  # Keep a reference to avoid garbage collection
+    image_label.pack(pady=5)
+    
+    if recent_settings:
+        with open("rgt_settings.json", "r") as f:
+            settings = json.load(f)
+        settings_label = tk.Label(popup, text=f"RECENT SETTINGS\nRodent: {settings["RODENT_SELECTION"]}\nClick limit: {settings["click_value"]}\nTimer: {settings["timer_value"]} minute(s)\nEmail: {settings["recipient_email"]}", justify=tk.LEFT, wraplength=250)
+        settings_label.pack()
+    
+    def on_begin():
+        popup.result = "begin"
+        popup.destroy()
+    
+    def on_restart():
+        popup.result = "restart"
+        popup.destroy()
+    
+    def on_cancel():
+        popup.result = None
+        popup.destroy()
+
+    button_frame = tk.Frame(popup)
+    button_frame.pack(expand=True, fill=None, pady=5)
+    
+    tk.Button(button_frame, text="Start New", command=on_begin).pack(side=tk.TOP, pady=3, padx=5)
+    if os.path.exists("rgt_settings.json"):
+        tk.Button(button_frame, text="Use Recent", command=on_restart).pack(side=tk.TOP, pady=8, padx=5)
+
+    root.wait_window(popup)
+    return getattr(popup, 'result', None) # Return the result or None if cancelled
+
+
+
 # RODENT SELECTION
 
 RODENT_CONFIGS = {
@@ -56,56 +114,80 @@ RODENT_CONFIGS = {
         "LOWER_GREEN": np.array([40, 50, 50]), # HSV range for green screen
         "UPPER_GREEN": np.array([80, 255, 255]),
         "VALUE_THRESHOLD": 180, # Max Value (HSV) to exclude lighter tail
-        "MIN_CLICK_INTERVAL": 4  # Minimum seconds between clicks
+        "MIN_CLICK_INTERVAL": 4,  # Minimum seconds between clicks
+        "IN_RANGE_DURATION": 0.4,  # Seconds to maintain speed range before click
+        "SPEED_RANGE_PERCENT": 50,  # What percent the speed has to be within the average to click
+        "AVG_SPEED_MIN": 50  # Minimum speed the rat has to be going to click
     },
     "White Rat": {
         "MIN_AREA": 500,
         "LOWER_GREEN": np.array([40, 50, 50]),
         "UPPER_GREEN": np.array([80, 255, 255]),
         "VALUE_THRESHOLD": 150,
-        "MIN_CLICK_INTERVAL": 4
+        "MIN_CLICK_INTERVAL": 4,
+        "IN_RANGE_DURATION": 0.4,
+        "SPEED_RANGE_PERCENT": 50,
+        "AVG_SPEED_MIN": 50
     },
     "Black and White Rat": {
         "MIN_AREA": 500,
         "LOWER_GREEN": np.array([40, 50, 50]),
         "UPPER_GREEN": np.array([80, 255, 255]),
         "VALUE_THRESHOLD": 180,
-        "MIN_CLICK_INTERVAL": 4
+        "MIN_CLICK_INTERVAL": 4,
+        "IN_RANGE_DURATION": 0.4,
+        "SPEED_RANGE_PERCENT": 50,
+        "AVG_SPEED_MIN": 50
     },
     "Brown Rat": {
         "MIN_AREA": 500,
         "LOWER_GREEN": np.array([35, 50, 50]),
         "UPPER_GREEN": np.array([85, 255, 255]),
         "VALUE_THRESHOLD": 170,
-        "MIN_CLICK_INTERVAL": 4
+        "MIN_CLICK_INTERVAL": 4,
+        "IN_RANGE_DURATION": 0.4,
+        "SPEED_RANGE_PERCENT": 50,
+        "AVG_SPEED_MIN": 50
     },
     "Black Mouse": {
         "MIN_AREA": 200,
         "LOWER_GREEN": np.array([40, 50, 50]),
         "UPPER_GREEN": np.array([80, 255, 255]),
         "VALUE_THRESHOLD": 180,
-        "MIN_CLICK_INTERVAL": 2.5
+        "MIN_CLICK_INTERVAL": 2.5,
+        "IN_RANGE_DURATION": 0.5,
+        "SPEED_RANGE_PERCENT": 50,
+        "AVG_SPEED_MIN": 50
     },
     "White Mouse": {
         "MIN_AREA": 200,
         "LOWER_GREEN": np.array([40, 50, 50]),
         "UPPER_GREEN": np.array([80, 255, 255]),
         "VALUE_THRESHOLD": 150,
-        "MIN_CLICK_INTERVAL": 2.5
+        "MIN_CLICK_INTERVAL": 2.5,
+        "IN_RANGE_DURATION": 0.5,
+        "SPEED_RANGE_PERCENT": 50,
+        "AVG_SPEED_MIN": 50
     },
     "Brown Mouse": {
         "MIN_AREA": 200,
         "LOWER_GREEN": np.array([35, 50, 50]),
         "UPPER_GREEN": np.array([85, 255, 255]),
         "VALUE_THRESHOLD": 170,
-        "MIN_CLICK_INTERVAL": 2.5
+        "MIN_CLICK_INTERVAL": 2.5,
+        "IN_RANGE_DURATION": 0.5,
+        "SPEED_RANGE_PERCENT": 50,
+        "AVG_SPEED_MIN": 50
     },
     "Black and White Mouse": {
         "MIN_AREA": 200,
         "LOWER_GREEN": np.array([40, 50, 50]),
         "UPPER_GREEN": np.array([80, 255, 255]),
         "VALUE_THRESHOLD": 180,
-        "MIN_CLICK_INTERVAL": 2.5
+        "MIN_CLICK_INTERVAL": 2.5,
+        "IN_RANGE_DURATION": 0.5,
+        "SPEED_RANGE_PERCENT": 50,
+        "AVG_SPEED_MIN": 50
     }
 }
 
@@ -393,14 +475,6 @@ def create_click_limit_popup():
     root.wait_window(popup)
     return getattr(popup, 'result', None) # Return the result or None if cancelled
 
-# Send email when click limit reached
-def click_limit_exceeded(event):
-    print("Sending click limit email")
-    email_subject = f"RGT Click Limit Reached at {time.ctime()}"
-    email_body = f"RGT has recorded {initial_settings['click_value']} videos.\nRGT has stopped recording, so you will need to restart the program."
-    send_email(email_subject, email_body)
-    event.set() # Set the event to signal expiration
-
 
 
 # TIMER SELECTION
@@ -473,11 +547,6 @@ def create_timer_popup():
 
 # Send email when timer expires
 def time_expiration(event):
-    if send_email_flag:
-        print("Sending time expiration email")
-        email_subject = f"RGT Time Limit Reached at {time.ctime()}"
-        email_body = f"Your {initial_settings['timer_value']} minute timer has expired.\nRGT has stopped recording, so you will need to restart the program."
-        send_email(email_subject, email_body)
     event.set() # Set the event to signal expiration
 
 
@@ -504,7 +573,9 @@ def create_email_selection_popup(config):
     # Create buttons
     def on_use_saved():
         if recipient_email and "@" in recipient_email and "." in recipient_email:
+            global send_email_flag
             popup.result = config["recipient_email"]
+            send_email_flag = True
             popup.destroy()
             print(f"Email set for alerts: {recipient_email}")
         else:
@@ -516,8 +587,10 @@ def create_email_selection_popup(config):
     def on_enter_new():
         email = new_email.get().strip()
         if email and "@" in email and "." in email:
+            global send_email_flag
             save_email(config, email)
             popup.result = config["recipient_email"]
+            send_email_flag = True
             popup.destroy()
             print(f"Email set for alerts: {email}")
         else:
@@ -595,11 +668,11 @@ def send_email(subject, body):
     except Exception as e:
         print(f"Error sending email: {e}")
 
+    
 
+# ENDING WINDOW
 
-# RESTART WINDOW
-
-def create_restart_window(ending):
+def create_ending_window(ending):
     popup = tk.Toplevel()
     popup.title(f"{ending}")
     center_x, center_y = center_window(popup, 400, 200)
@@ -607,22 +680,16 @@ def create_restart_window(ending):
     popup.resizable(False, False)
     popup.iconbitmap(icon_path)
     
-    tk.Label(popup, text="Your program has finished!\nClick Restart to go again,\nor Cancel to close RGT.", wraplength=250).pack(pady=10)
+    if send_email_flag:
+        print("Sending email")
+        email_subject = f"Your Program Has Ended"
+        email_body = "RGT has stopped recording, either because the click limit has been reached or the timer has expired.\nPlease return to either restart or end the program."
+        send_email(email_subject, email_body)
     
-    # Create buttons
-    def on_restart():
-        print("Restart initiated")
-        popup.destroy()
-        # Save settings and restart
-        with open("rgt_settings.json", "w") as f:
-            json.dump(initial_settings, f)
-        os.execl(sys.executable, sys.executable, *sys.argv)
+    tk.Label(popup, text="Your program has finished!\nClick Done to close RGT.", wraplength=250).pack(pady=10)
         
-    def on_cancel():
-        print("\"Cancel\" selected, deleting settings and exiting")
-        if os.path.exists("rgt_settings.json"):
-            os.remove("rgt_settings.json")
-            print("rgt_settings.json deleted")
+    def on_done():
+        print("Exiting program")
         global should_stop
         should_stop = True
         if 'timer' in globals():
@@ -632,9 +699,9 @@ def create_restart_window(ending):
     button_frame = tk.Frame(popup)
     button_frame.pack(expand=True, fill=None, pady=5)
     
-    tk.Button(button_frame, text="Restart", command=on_restart).pack(side=tk.LEFT, padx=5)
-    tk.Button(button_frame, text="Cancel", command=on_cancel).pack(side=tk.LEFT, padx=5)
-    
+    # tk.Button(button_frame, text="Restart", command=on_restart).pack(side=tk.LEFT, padx=5)
+    tk.Button(button_frame, text="Done", command=on_done).pack(side=tk.LEFT, padx=5)
+
     popup.grab_set()
     root.wait_window(popup)
     return None
@@ -645,6 +712,7 @@ def create_restart_window(ending):
 
 # Create stop button window
 def create_stop_button_window():
+    global stop_window
     stop_window = tk.Toplevel()
     stop_window.title("Stop")
     stop_window.iconbitmap(icon_path)
@@ -667,9 +735,6 @@ def create_stop_button_window():
         global should_stop
         print("Stop button clicked")
         should_stop = True
-        if os.path.exists("rgt_settings.json"):
-            os.remove("rgt_settings.json")
-            print("rgt_settings.json deleted")
         stop_window.destroy()
     
     def on_adjust():
@@ -677,7 +742,7 @@ def create_stop_button_window():
     
     def on_cancel():
         stop_window.destroy()
-        print("Stop window closed — recreating...")
+        print("Stop window closed - recreating...")
         create_stop_button_window()
     
     stop_window.protocol("WM_DELETE_WINDOW", on_cancel)
@@ -689,6 +754,7 @@ def create_stop_button_window():
 
     stop_window.update()  # Force window to render
     print("Stop window created")
+    return stop_window
 
 
 
@@ -706,7 +772,7 @@ def create_control_panel():
     offset_x = 180
     offset_y = 70
     window_width = 300
-    window_height = 150
+    window_height = 210
     x_position = screen_width - window_width - offset_x
     y_position = screen_height - window_height - offset_y
     control_panel.geometry(f"{window_width}x{window_height}+{int(x_position)}+{int(y_position)}")
@@ -714,27 +780,35 @@ def create_control_panel():
     
     duration_frame = tk.Frame(control_panel)
     duration_frame.pack()
-    speed_duration = tk.StringVar(value=str(IN_RANGE_DURATION))
-    tk.Label(duration_frame, text="Speed Duration (sec):").pack(pady=10, side='left')
+    speed_duration = tk.StringVar(value=str(initial_settings["IN_RANGE_DURATION"]))
+    tk.Label(duration_frame, text="Speed Duration (sec):").pack(pady=5, side='left')
     tk.Entry(duration_frame, textvariable=speed_duration, width=4).pack(pady=2, padx=5, side='left')
     
     tolerance_frame = tk.Frame(control_panel)
     tolerance_frame.pack()
-    speed_tolerance = tk.StringVar(value=str(SPEED_RANGE_PERCENT))
-    tk.Label(tolerance_frame, text="Speed Range %:").pack(pady=5, side='left')
+    speed_tolerance = tk.StringVar(value=str(initial_settings["SPEED_RANGE_PERCENT"]))
+    tk.Label(tolerance_frame, text="Speed Range (%):").pack(pady=5, side='left')
     tk.Entry(tolerance_frame, textvariable=speed_tolerance, width=4).pack(pady=2, padx=5, side='left')
+    
+    average_frame = tk.Frame(control_panel)
+    average_frame.pack()
+    average_minimum = tk.StringVar(value=str(initial_settings["AVG_SPEED_MIN"]))
+    tk.Label(average_frame, text="Speed Min (pixels/sec):").pack(pady=5, side='left')
+    tk.Entry(average_frame, textvariable=average_minimum, width=4).pack(pady=2, padx=5, side='left')
     
     def on_save(save_button):
         try:
             new_duration_value = float(speed_duration.get())
             new_tolerance_value = float(speed_tolerance.get())
-            if new_duration_value <= 0 or new_tolerance_value < 0 or new_tolerance_value > 100:
+            new_average_value = float(average_minimum.get())
+            if new_duration_value <= 0 or new_tolerance_value < 0 or new_tolerance_value > 100 or new_average_value < 0:
                 raise ValueError("• All values must be positive\n• Duration must be greater than 0\n• % must be between 0-100")
-            global IN_RANGE_DURATION, SPEED_RANGE_PERCENT
-            IN_RANGE_DURATION = new_duration_value
-            SPEED_RANGE_PERCENT = new_tolerance_value
+            initial_settings["IN_RANGE_DURATION"] = new_duration_value
+            initial_settings["SPEED_RANGE_PERCENT"] = new_tolerance_value
+            initial_settings["AVG_SPEED_MIN"] = new_average_value
             print(f"IN_RANGE_DURATION set for {new_duration_value} seconds")
             print(f"SPEED_RANGE_PERCENT set for {new_tolerance_value} percent")
+            print(f"AVG_SPEED_MIN set for {new_average_value} pixels/sec")
             save_button.config(bg="green", fg="white")
             root.after(200, lambda: save_button.config(bg="white", fg="black"))
         except ValueError as e:
@@ -771,7 +845,6 @@ def center_window(popup, window_width, window_height):
     # Get screen dimensions
     screen_width = popup.winfo_screenwidth()
     screen_height = popup.winfo_screenheight()
-    
     # Calculate center coordinates
     center_x = int((screen_width - window_width) / 2)
     center_y = int((screen_height - window_height) / 2)
@@ -797,19 +870,39 @@ def gait_tracker():
     click_counter = 0
     
     # Start timer if set
-    if initial_settings.get("timer_value", 0) > 0:
+    timer_value = initial_settings.get("timer_value", 0)
+    if isinstance(timer_value, (int, float)) and timer_value > 0:
         timer_duration = initial_settings["timer_value"] * 60
         timer = threading.Timer(timer_duration, lambda: time_expiration(time_expired_event))
         timer.start()
+    
+    click_value = initial_settings.get("click_value", float('inf'))
     
     while not should_stop:
         # Check to see if timer has expired
         if time_expired_event.is_set():
             should_stop = True
             try:
-                stop_window.destroy()
-                create_restart_window("Timer Expired")
-            except NameError:
+                if 'stop_window' in globals() and stop_window.winfo_exists():
+                    stop_window.destroy()
+                else:
+                    print("Stop window not found or already destroyed")
+                create_ending_window("Timer Expired")
+            except (NameError, tk.TclError) as e:
+                root.quit()
+                root.destroy()
+                break
+        
+        if isinstance(click_value, (int, float)) and click_counter >= initial_settings.get("click_value", float('inf')):
+            should_stop = True
+            # click_limit_exceeded()
+            try:
+                if 'stop_window' in globals() and stop_window.winfo_exists():
+                    stop_window.destroy()
+                else:
+                    print("Stop window not found or already destroyed")
+                create_ending_window("Click Limit Exceeded")
+            except (NameError, tk.TclError) as e:
                 root.quit()
                 root.destroy()
                 break
@@ -859,7 +952,7 @@ def gait_tracker():
             dx = centroid[0] - last_centroid[0]
             speed = abs(dx) * FRAME_RATE / FRAME_SKIP
             speeds.append(speed)
-            speeds = [s for s in speeds if current_time - time.time() <= IN_RANGE_DURATION and s < 4000]
+            speeds = [s for s in speeds if current_time - time.time() <= initial_settings["IN_RANGE_DURATION"] and s < 4000]
             if len(speeds) > SPEEDS_CAP:
                 speeds.pop(0)
         else:
@@ -869,19 +962,19 @@ def gait_tracker():
         avg_speed = np.mean(speeds) if speeds else 0.0
 
         # Check if all speed measurements are within SPEED_RANGE_PERCENT
-        lower_bound = avg_speed * (1 - (SPEED_RANGE_PERCENT / 100))
-        upper_bound = avg_speed * (1 + (SPEED_RANGE_PERCENT / 100))
+        lower_bound = avg_speed * (1 - (initial_settings["SPEED_RANGE_PERCENT"] / 100))
+        upper_bound = avg_speed * (1 + (initial_settings["SPEED_RANGE_PERCENT"] / 100))
 
         all_within_range = all(lower_bound <= speed <= upper_bound for speed in speeds) if speeds else False
-        all_significant = all(50 <= speed for s in speeds) if speeds else False
+        all_significant = all(initial_settings["AVG_SPEED_MIN"] <= speed for s in speeds) if speeds else False
 
         if all_significant and all_within_range:
             in_range_timestamps.append(current_time)
             # Check if speed has been in range for IN_RANGE_DURATION
-            if in_range_timestamps and (current_time - in_range_timestamps[0]) >= IN_RANGE_DURATION:
+            if in_range_timestamps and (current_time - in_range_timestamps[0]) >= initial_settings["IN_RANGE_DURATION"]:
                 is_in_range_for_duration = True
             # Remove timestamps older than IN_RANGE_DURATION
-            in_range_timestamps = [t for t in in_range_timestamps if current_time - t <= IN_RANGE_DURATION]
+            in_range_timestamps = [t for t in in_range_timestamps if current_time - t <= initial_settings["IN_RANGE_DURATION"]]
         else:
             # Speed is out of range, clear timestamps to reset timer
             in_range_timestamps = []
@@ -892,22 +985,6 @@ def gait_tracker():
                 last_click_time = current_time
                 is_in_range_for_duration = False  # Reset flag after click
                 click_counter += 1
-                if click_counter == initial_settings['click_value'] and send_email_flag:  # Send email if click limit is reached
-                    print("Sending click limit email")
-                    email_subject = f"RGT Video Limit Reached at {time.ctime()}"
-                    email_body = f"{initial_settings['click_value']} videos recorded at {time.ctime()}.\nRGT has stopped recording, so you will need to process those videos then restart the program."
-                    send_email(email_subject, email_body)
-                if click_counter >= initial_settings.get("click_value", float('inf')):  # Pause program if click limit is reached
-                    should_stop = True
-                    try:
-                        stop_window.destroy()
-                        if 'timer' in globals():
-                            timer.cancel()
-                        create_restart_window("Click Limit Reached")
-                    except (NameError, tk.TclError):
-                        root.quit()
-                        root.destroy()
-                        break
 
         last_centroid = centroid
         
@@ -943,24 +1020,29 @@ MAIN PROGRAM STARTS
 """
 
 if __name__ == "__main__":
-    global should_stop
+    global should_stop, stop_window
     should_stop = False
 
     # Load or create settings
-    if os.path.exists("rgt_settings.json"):
+    beginning = create_start_screen_popup()
+    if beginning == "restart" and os.path.exists("rgt_settings.json"):
         with open("rgt_settings.json", "r") as f:
             initial_settings = json.load(f)
-    else:
+    elif beginning == "begin":
         selected_rodent = create_rodent_selection_popup()
         if selected_rodent is None:
             print("Program cancelled at rodent selection")
             root.destroy()
             sys.exit(0)
+        initial_settings["RODENT_SELECTION"] = selected_rodent
         initial_settings["MIN_AREA"] = RODENT_CONFIGS[selected_rodent]["MIN_AREA"]
         initial_settings["LOWER_GREEN"] = RODENT_CONFIGS[selected_rodent]["LOWER_GREEN"].tolist()
         initial_settings["UPPER_GREEN"] = RODENT_CONFIGS[selected_rodent]["UPPER_GREEN"].tolist()
         initial_settings["VALUE_THRESHOLD"] = RODENT_CONFIGS[selected_rodent]["VALUE_THRESHOLD"]
         initial_settings["MIN_CLICK_INTERVAL"] = RODENT_CONFIGS[selected_rodent]["MIN_CLICK_INTERVAL"]
+        initial_settings["IN_RANGE_DURATION"] = RODENT_CONFIGS[selected_rodent]["IN_RANGE_DURATION"]
+        initial_settings["SPEED_RANGE_PERCENT"] = RODENT_CONFIGS[selected_rodent]["SPEED_RANGE_PERCENT"]
+        initial_settings["AVG_SPEED_MIN"] = RODENT_CONFIGS[selected_rodent]["AVG_SPEED_MIN"]
 
         saved_coords = load_coordinates()
         choice = create_coordinate_choice_popup(saved_coords)
@@ -996,6 +1078,16 @@ if __name__ == "__main__":
             sys.exit(0)
         else:
             initial_settings["recipient_email"] = email
+        
+        if initial_settings.get("timer_value") is None or initial_settings["timer_value"] <= 0:
+            initial_settings["timer_value"] = 0  # Default to no timer if invalid
+        
+        if initial_settings.get("click_value") is None or initial_settings["click_value"] <= 0:
+            initial_settings["click_value"] = np.inf  # Default to no click counter if invalid
+    else:
+        print("Program cancelled at start screen")
+        root.destroy()
+        sys.exit(0)
     stop_window = create_stop_button_window()
     MONITOR_SIDEVIEW = {"top": initial_settings["top_left"][1], "left": initial_settings["top_left"][0],
                        "width": initial_settings["bottom_right"][0] - initial_settings["top_left"][0],
@@ -1011,8 +1103,8 @@ if __name__ == "__main__":
             stop_window.destroy()
         if 'timer' in globals():
             timer.cancel()
-        if os.path.exists("rgt_settings.json"):
-            os.remove("rgt_settings.json")
+        with open("rgt_settings.json", "w") as f:
+            json.dump(initial_settings, f)
         root.quit()
         root.destroy()
     except Exception as e:
