@@ -1,6 +1,7 @@
 # RODENT GAIT TRACKER (RGT)
 
 The **Rodent Gait Tracker (RGT)** is a Python application designed to monitor and analyze the gait of rodents using computer vision techniques. It captures video input, detects rodent movement, calculates speed, and automates mouse clicks based on predefined conditions. The tool includes a graphical user interface (GUI) for configuration, live adjustments, and stopping the tracking process.
+For additional information, check out this [documentation](https://docs.google.com/document/d/1QiaMI2TV5QQQDaZsj8mu1Dqb0wYp78T_UU9TO6RMIsY/edit?usp=sharing).
 
 ## Features
 - Real-time rodent gait tracking using OpenCV.
